@@ -1,6 +1,5 @@
-use anyhow::{bail, Result};
+use anyhow::{anyhow, bail, Result};
 use glob::glob;
-use reqwest::blocking as reqwest;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -64,11 +63,11 @@ fn get_urls(context: &json::JsonValue) -> Result<Vec<String>> {
     Ok(urls)
 }
 
-fn download_url(url: &str) -> Result<String> {
+async fn download_url(url: &str) -> Result<String> {
     println!("download_url: {}", url);
-    let response = reqwest::get(url)?;
+    let response = reqwest::get(url).await?;
 
-    let contents = response.bytes()?;
+    let contents = response.bytes().await?;
 
     // Use md5sum of the data as filename, we only care about exact duplicates.
     //let tmpdir = tempfile::Builder::new().prefix("iocost-benchmark").tempdir()?;
@@ -135,10 +134,22 @@ fn merge_results_in_dir(path: &Path) -> Result<PathBuf> {
     Ok(merged_path)
 }
 
-fn main() -> Result<()> {
+fn get_summary(path: &Path) -> Result<String> {
+    let output = std::process::Command::new("./resctl-demo/target/release/resctl-bench")
+        .args(&["--result", path.to_string_lossy().to_string().as_str(), "summary"])
+        .output()?;
+
+    if !output.stderr.is_empty() {
+        panic!("{}", String::from_utf8(output.stderr)?);
+    }
+
+    String::from_utf8(output.stdout).map_err(|e| anyhow!(e))
+}
+
+#[tokio::main]
+async fn main() -> Result<()> {
     let token = std::env::var("GITHUB_TOKEN")?;
 
-    /*octocrab::initialise(octocrab::Octocrab::builder().personal_token(token))?;*/
     let context = json::parse(&std::env::var("GITHUB_CONTEXT")?)?;
 
     let git_repo = git2::Repository::open(".")?;
@@ -149,11 +160,11 @@ fn main() -> Result<()> {
     // Download and validate all provided URLs.
     let urls = get_urls(&context)?;
     for url in urls {
-        let filename = download_url(&url)?;
+        let filename = download_url(&url).await?;
         let model_name = get_normalized_model_name(&filename)?;
 
         let model_directory = PathBuf::from(format!("database/{}", model_name));
-        fs::create_dir(&model_directory).ok();
+        fs::create_dir_all(&model_directory).ok();
 
         let database_file = model_directory.join(&filename);
         fs::rename(&filename, &database_file)?;
@@ -164,9 +175,12 @@ fn main() -> Result<()> {
     }
 
     // Call rectl-bench to merge all files for the directories with new files.
+    let mut summaries = vec![];
     for dir in &directories_to_merge {
         let merged_path = merge_results_in_dir(dir.as_path())?;
         index.add_path(&merged_path)?;
+
+        summaries.push(get_summary(&merged_path)?);
     }
 
     // Commit the new and changed files.
@@ -177,7 +191,10 @@ fn main() -> Result<()> {
     let oid = index.write_tree()?;
     let tree = git_repo.find_tree(oid)?;
 
-    let commit_mesasge = format!(
+    let issue_id = context["event"]["issue"]["number"].as_i64().unwrap();
+    let description = format!("Closes #{}\n```\n{}\n```", issue_id, summaries.join("\n"));
+
+    let commit_title = format!(
         "Updated {}",
         directories_to_merge
             .iter()
@@ -186,16 +203,18 @@ fn main() -> Result<()> {
             .join(", ")
     );
 
+    let commit_message = format!("{commit_title}\n\n{description}");
+
     let commit = git_repo.commit(
         Some("HEAD"),
         &sig,
         &sig,
-        &commit_mesasge,
+        &commit_message,
         &tree,
         &[&parent_commit],
     )?;
 
-    let branch_name = format!("iocost-bot/{}", context["event"]["issue"]["id"]);
+    let branch_name = format!("iocost-bot/{}", issue_id);
     git_repo.branch(&branch_name, &git_repo.find_commit(commit)?, true)?;
 
     // Push to a branch and send a PR.
@@ -203,7 +222,7 @@ fn main() -> Result<()> {
     callbacks.credentials(|_url, _username_from_url, _allowed_types| {
         git2::Cred::userpass_plaintext("iocost-bot", &token)
     });
-    callbacks.push_update_reference(|name, status| {
+    callbacks.push_update_reference(|_name, status| {
         if let Some(e) = status {
             panic!("Error: {e}");
         }
@@ -211,12 +230,33 @@ fn main() -> Result<()> {
     });
 
     println!("Pushing to branch {branch_name}...");
+
     let refspec = format!("+HEAD:refs/heads/{branch_name}");
-    let mut remote = git_repo.find_remote("httpsorigin")?;
+    let mut remote = git_repo.find_remote("origin")?;
     remote.push(
         &[&refspec],
         Some(git2::PushOptions::new().remote_callbacks(callbacks)),
     )?;
+
+    let octo = octocrab::Octocrab::builder().personal_token(token).build()?;
+    let pulls = octo.pulls("kov", "iocost-benchmarks");
+
+    let requests = pulls.list()
+        .head(&branch_name)
+        .base("main")
+        .send()
+        .await?
+        .take_items();
+
+    // There should only ever be one PR for a given issue / branch.
+    assert_eq!(requests.len(), 1);
+
+    if requests.is_empty() {
+        pulls.create(&commit_title, &branch_name, "main")
+            .body(description)
+            .send()
+            .await?;
+    }
 
     /*
         let issue = octocrab::instance()

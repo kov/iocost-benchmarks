@@ -33,10 +33,13 @@ jobs:
         run: cargo build --release --all-features
 
       - name: Build resctl-demo
-        run: cd ${GITHUB_WORKSPACE}/resctl-demo && cargo build --release --bin resctl-bench
+        run: >
+          cd ${GITHUB_WORKSPACE}/resctl-demo && cargo build --release;
+          echo ${GITHUB_WORKSPACE}/resctl-demo/target/release >> $GITHUB_PATH
 
       - name: Download results
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
           GITHUB_CONTEXT: ${{ toJSON(github) }}
+          RUST_BACKTRACE: 1
         run: ./target/release/import-results
