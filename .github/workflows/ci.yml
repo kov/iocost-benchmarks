@@ -45,6 +45,9 @@ jobs:
 
       - name: Install PDF formatting dependencies and fix config
         run: |
+          mkdir -p ~/.fonts/adobe-fonts
+          git clone https://github.com/adobe-fonts/source-code-pro.git ~/.fonts/adobe-fonts/source-code-pro
+          fc-cache -f -v ~/.fonts/adobe-fonts/source-code-pro
           sudo apt install inkscape ghostscript
           sudo sed -i '/disable ghostscript format types/,+6d' /etc/ImageMagick-6/policy.xml
 
