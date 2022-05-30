@@ -39,12 +39,12 @@ jobs:
           chmod +x resctl-demo-v*/*
 
       - name: Smoketest resctl-demo
-        run: >
-          resctl-demo-v2.1/resctl-bench --version;
-          resctl-demo-v2.2/resctl-bench --version;
+        run: |
+          resctl-demo-v2.1/resctl-bench --version
+          resctl-demo-v2.2/resctl-bench --version
 
       - name: Install PDF formatting dependencies and fix config
-        run: >
+        run: |
           sudo apt install inkscape ghostscript
           sudo sed -i '/disable ghostscript format types/,+6d' /etc/ImageMagick-6/policy.xml
 
