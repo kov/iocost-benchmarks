@@ -43,6 +43,10 @@ jobs:
           resctl-demo-v2.1/resctl-bench --version;
           resctl-demo-v2.2/resctl-bench --version;
 
+      - name: Install PDF formatting dependencies
+        run: >
+          sudo apt install inkscape ghostscript
+
       - name: Run import-results
         env:
           GITHUB_CONTEXT: ${{ toJSON(github) }}
