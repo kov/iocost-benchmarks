@@ -81,3 +81,12 @@ jobs:
         run: |
           echo ${{ secrets.GH_TOKEN }} | gh auth login --with-token
           gh pr create --fill -B main -H ${{ env.BRANCH_NAME }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: PDFs
+          retention-days: 30
+          if-no-files-found: error
+          path: |
+            ${{ format('pdfs-for-{0}', github.event.issue.number) }}
