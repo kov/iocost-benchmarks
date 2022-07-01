@@ -1,0 +1,63 @@
+name: Merge results
+
+on:
+  workflow_dispatch:
+  pull_request_target:
+    types:
+      - closed
+jobs:
+  run:
+    name: Merge results
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout benchmarks repository
+        uses: actions/checkout@v2
+
+      - name: Download merge-results binary
+        uses: dawidd6/action-download-artifact@v2
+        with:
+          repo: ${{ format('{0}-ci', github.repository) }}
+          workflow: ci.yml
+          branch: main
+
+      - name: Set merge-results binary permissions
+        run: |
+          chmod +x iocost-benchmarks-ci/merge-results
+
+      - name: Download resctl-demo binary
+        uses: dawidd6/action-download-artifact@v2
+        with:
+          repo: ${{ format('{0}-ci', github.repository) }}
+          workflow: build-resctl-demo.yml
+          branch: main
+
+      - name: Set resctl-demo permissions
+        run: |
+          chmod +x resctl-demo-v*/*
+
+      - name: Smoketest resctl-demo
+        run: |
+          resctl-demo-v2.1/resctl-bench --version
+          resctl-demo-v2.2/resctl-bench --version
+
+      - name: Install PDF formatting dependencies and fix config
+        run: |
+          mkdir -p ~/.fonts/adobe-fonts
+          git clone https://github.com/adobe-fonts/source-code-pro.git ~/.fonts/adobe-fonts/source-code-pro
+          fc-cache -f -v ~/.fonts/adobe-fonts/source-code-pro
+          sudo apt install inkscape ghostscript
+          sudo sed -i '/disable ghostscript format types/,+6d' /etc/ImageMagick-6/policy.xml
+
+      - name: Run merge-results
+        env:
+          GITHUB_CONTEXT: ${{ toJSON(github) }}
+        run: iocost-benchmarks-ci/merge-results
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: PDFs
+          retention-days: 30
+          if-no-files-found: error
+          path: |
+            ${{ format('pdfs-for-{0}', github.event.issue.number) }}
