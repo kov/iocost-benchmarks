@@ -86,7 +86,6 @@ jobs:
         uses: actions/upload-artifact@v2
         with:
           name: PDFs
-          retention-days: 30
           if-no-files-found: error
           path: |
             ${{ format('pdfs-for-{0}', github.event.issue.number) }}
