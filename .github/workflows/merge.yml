@@ -2,9 +2,10 @@ name: Merge results
 
 on:
   workflow_dispatch:
-  pull_request_target:
-    types:
-      - closed
+  push:
+    branches:
+      - main
+
 jobs:
   run:
     name: Merge results
@@ -60,4 +61,19 @@ jobs:
           if-no-files-found: error
           path: |
             pdfs
-            merged-results
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: Individual HWDB files
+          if-no-files-found: error
+          path: |
+            hwdb-inputs
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: Consolidated Hardware Database configuration
+          if-no-files-found: error
+          path: |
+            hwdb
