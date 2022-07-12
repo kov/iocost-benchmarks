@@ -52,7 +52,7 @@ jobs:
       - name: Run merge-results
         env:
           GITHUB_CONTEXT: ${{ toJSON(github) }}
-        run: iocost-benchmarks-ci/merge-results
+        run: env RUST_BACKTRACE=1 iocost-benchmarks-ci/merge-results
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v2
