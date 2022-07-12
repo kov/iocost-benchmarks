@@ -61,3 +61,11 @@ jobs:
           if-no-files-found: error
           path: |
             pdfs
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: HWDB
+          if-no-files-found: error
+          path: |
+            hwdb-inputs
