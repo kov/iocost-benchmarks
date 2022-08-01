@@ -54,7 +54,7 @@ jobs:
           GITHUB_CONTEXT: ${{ toJSON(github) }}
         run: iocost-benchmarks-ci/merge-results
 
-      - name: Upload artifacts
+      - name: Upload PDFs
         uses: actions/upload-artifact@v2
         with:
           name: PDFs
@@ -62,15 +62,23 @@ jobs:
           path: |
             pdfs
 
-      - name: Upload artifacts
+      - name: Upload merged results
         uses: actions/upload-artifact@v2
         with:
-          name: hwdb input files
+          name: Merged results
+          if-no-files-found: error
+          path: |
+            merged-results
+
+      - name: Upload hwdb inputs
+        uses: actions/upload-artifact@v2
+        with:
+          name: Input files for hwdb
           if-no-files-found: error
           path: |
             hwdb-inputs
 
-      - name: Upload artifacts
+      - name: Upload final hwdb file
         uses: actions/upload-artifact@v2
         with:
           name: Final hwdb file
